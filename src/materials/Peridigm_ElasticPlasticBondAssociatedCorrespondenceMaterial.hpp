@@ -77,6 +77,12 @@ namespace PeridigmNS {
                                      const int* neighborhoodList,
                                      PeridigmNS::DataManager& dataManager) const;
 
+    //! Evaluate the second Piola-Kirchhoff stress
+    virtual void computePK2Stress(const double dt,
+                                  const int numOwnedPoints,
+                                  const int* neighborhoodList,
+                                  PeridigmNS::DataManager& dataManager) const;
+
     //! Returns the requested material property
     //! A dummy method here.
     virtual double lookupMaterialProperty(const std::string keyname) const {return 0.0;}

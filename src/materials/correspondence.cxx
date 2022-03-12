@@ -71,6 +71,24 @@ void setOnesOnDiagonalFullTensor(ScalarT* tensor, int numPoints){
 }
 
 template<typename ScalarT>
+void setIdentityFullTensor(ScalarT* tensor, int numPoints){
+
+  ScalarT *tens = tensor;
+
+  for(int iID=0; iID<numPoints; ++iID, tens+=9){
+    *(tens) = 1.0;
+    *(tens+1) = 0.0;
+    *(tens+2) = 0.0;
+    *(tens+3) = 0.0;
+    *(tens+4) = 1.0;
+    *(tens+5) = 0.0;
+    *(tens+6) = 0.0;
+    *(tens+7) = 0.0;
+    *(tens+8) = 1.0;
+  };
+}
+
+template<typename ScalarT>
 int Invert3by3Matrix
 (
     const ScalarT* matrix,
@@ -1201,7 +1219,7 @@ void computeGreenLagrangeStrain
     ScalarT* greenLagrangeStrainYX,
     ScalarT* greenLagrangeStrainYY,
     ScalarT* greenLagrangeStrainYZ,
-     ScalarT* greenLagrangeStrainZX,
+    ScalarT* greenLagrangeStrainZX,
     ScalarT* greenLagrangeStrainZY,
     ScalarT* greenLagrangeStrainZZ,
     int numPoints
@@ -3388,6 +3406,99 @@ void computeWeightedVolume
 
 
 template<typename ScalarT>
+void updateGreenLagrangeStrain
+(
+    const ScalarT* deformationGradientX,
+    const ScalarT* deformationGradientY,
+    const ScalarT* deformationGradientZ,
+    const ScalarT* deformationGradientDotX,
+    const ScalarT* deformationGradientDotY,
+    const ScalarT* deformationGradientDotZ,
+    const ScalarT* greenLagrangeStrainN,
+    ScalarT* greenLagrangeStrainNP1,
+    int numPoints,
+    double dt
+)
+{
+  // Green-Lagrange Strain rate Edot = 0.5*(Fdot^T F + F^T Fdot)
+
+  const ScalarT* defGradX = deformationGradientX;
+  const ScalarT* defGradY = deformationGradientY;
+  const ScalarT* defGradZ = deformationGradientZ;
+  const ScalarT* defGradDotX = deformationGradientDotX;
+  const ScalarT* defGradDotY = deformationGradientDotY;
+  const ScalarT* defGradDotZ = deformationGradientDotZ;
+  const ScalarT* strainN = greenLagrangeStrainN;
+  ScalarT* strainNP1 = greenLagrangeStrainNP1;
+
+  std::vector<ScalarT> tempVector(9);
+  ScalarT* temp = &tempVector[0];
+
+  std::vector<ScalarT> defGradVector(9) ; ScalarT* defGrad = &defGradVector[0];
+  std::vector<ScalarT> defGradDotVector(9) ; ScalarT* defGradDot = &defGradDotVector[0];
+
+  for(int iID=0 ; iID<numPoints ; ++iID, defGradX+=3, defGradY+=3, defGradZ+=3, 
+      defGradDotX+=3, defGradDotY+=3, defGradDotZ+=3, strainN+=9, strainNP1+=9){
+
+    for(int i=0; i<3; i++){
+      *(defGrad+i+0) = *(defGradX+i);
+      *(defGrad+i+3) = *(defGradY+i);
+      *(defGrad+i+6) = *(defGradZ+i);
+      *(defGradDot+i+0) = *(defGradDotX+i);
+      *(defGradDot+i+3) = *(defGradDotY+i);
+      *(defGradDot+i+6) = *(defGradDotZ+i);
+    }
+
+    MatrixMultiply(true, false, 1.0, defGradDot, defGrad, temp);
+
+    for(int i=0; i<3; i++)
+      for(int j=0; j<3; j++)
+        *(strainNP1+3*i+j) = *(strainN+3*i+j) + 0.5 * ( *(temp+3*i+j) + *(temp+3*j+i) ) * dt;
+  }
+}
+
+
+template<typename ScalarT>
+void computePrincipalStrains
+(
+    const ScalarT* strain,
+    ScalarT* principalStrains,
+    int numPoints
+)
+{
+  const ScalarT* str = strain;
+  ScalarT* principalStr = principalStrains;
+
+  // Lapack eigenvalue solver parameters
+  Epetra_LAPACK lpk_obj;
+  int N(3); // num dimensions
+  double symMatrix[N*(N+1)/2];
+  double eigenValues[N];
+  double WORK[3*N];
+  double Z[N*N];
+  int INFO;
+
+  for(int iID=0 ; iID<numPoints ; ++iID, str+=9, principalStr+=3){
+
+    // compute the principal stresses
+    symMatrix[0] = *(str+0);
+    symMatrix[1] = *(str+1);
+    symMatrix[2] = *(str+4);
+    symMatrix[3] = *(str+2);
+    symMatrix[4] = *(str+5);
+    symMatrix[5] = *(str+8);
+
+    // compute eigenvalues
+    lpk_obj.SPEV('N', 'U', N, symMatrix, eigenValues, Z, N, WORK, &INFO); // find eigenvalues of a symmetric matrix
+
+    // eigenValues are returned in a ascending order
+    for(int i=0; i<N; i++)
+      *(principalStr+i) = eigenValues[i];
+  }
+}
+
+
+template<typename ScalarT>
 int computeNodeLevelUnrotatedRateOfDeformationAndRotationTensor
 (
     const ScalarT* deformationGradientX,
@@ -4091,59 +4202,6 @@ int computeBondLevelUnrotatedRateOfDeformationAndRotationTensor
 
 
 template<typename ScalarT>
-void updateGreenLagrangeStrain
-(
-    const ScalarT* deformationGradientX,
-    const ScalarT* deformationGradientY,
-    const ScalarT* deformationGradientZ,
-    const ScalarT* deformationGradientDotX,
-    const ScalarT* deformationGradientDotY,
-    const ScalarT* deformationGradientDotZ,
-    const ScalarT* greenLagrangeStrainN,
-    ScalarT* greenLagrangeStrainNP1,
-    int numPoints,
-    double dt
-)
-{
-  // Green-Lagrange Strain rate Edot = 0.5*(Fdot^T F + F^T Fdot)
-
-  const ScalarT* defGradX = deformationGradientX;
-  const ScalarT* defGradY = deformationGradientY;
-  const ScalarT* defGradZ = deformationGradientZ;
-  const ScalarT* defGradDotX = deformationGradientDotX;
-  const ScalarT* defGradDotY = deformationGradientDotY;
-  const ScalarT* defGradDotZ = deformationGradientDotZ;
-  const ScalarT* strainN = greenLagrangeStrainN;
-  ScalarT* strainNP1 = greenLagrangeStrainNP1;
-
-  std::vector<ScalarT> tempVector(9);
-  ScalarT* temp = &tempVector[0];
-
-  std::vector<ScalarT> defGradVector(9) ; ScalarT* defGrad = &defGradVector[0];
-  std::vector<ScalarT> defGradDotVector(9) ; ScalarT* defGradDot = &defGradDotVector[0];
-
-  for(int iID=0 ; iID<numPoints ; ++iID, defGradX+=3, defGradY+=3, defGradZ+=3, 
-      defGradDotX+=3, defGradDotY+=3, defGradDotZ+=3, strainN+=9, strainNP1+=9){
-
-    for(int i=0; i<3; i++){
-      *(defGrad+i+0) = *(defGradX+i);
-      *(defGrad+i+3) = *(defGradY+i);
-      *(defGrad+i+6) = *(defGradZ+i);
-      *(defGradDot+i+0) = *(defGradDotX+i);
-      *(defGradDot+i+3) = *(defGradDotY+i);
-      *(defGradDot+i+6) = *(defGradDotZ+i);
-    }
-
-    MatrixMultiply(true, false, 1.0, defGradDot, defGrad, temp);
-
-    for(int i=0; i<3; i++)
-      for(int j=0; j<3; j++)
-        *(strainNP1+3*i+j) = *(strainN+3*i+j) + 0.5 * ( *(temp+3*i+j) + *(temp+3*j+i) ) * dt;
-  }
-}
-
-
-template<typename ScalarT>
 void rotateBondLevelCauchyStress
 (
     const ScalarT* bondLevelRotationTensorXX,
@@ -4241,6 +4299,347 @@ void rotateBondLevelCauchyStress
       *rotatedStressXX = rotatedStress[0]; *rotatedStressXY = rotatedStress[1]; *rotatedStressXZ = rotatedStress[2]; 
       *rotatedStressYX = rotatedStress[3]; *rotatedStressYY = rotatedStress[4]; *rotatedStressYZ = rotatedStress[5]; 
       *rotatedStressZX = rotatedStress[6]; *rotatedStressZY = rotatedStress[7]; *rotatedStressZZ = rotatedStress[8]; 
+    }
+  }
+}
+
+
+template<typename ScalarT>
+void computeStrainRateTensor
+(
+    const ScalarT* deformationGradientX,
+    const ScalarT* deformationGradientY,
+    const ScalarT* deformationGradientZ,
+    const ScalarT* deformationGradientDotX,
+    const ScalarT* deformationGradientDotY,
+    const ScalarT* deformationGradientDotZ,
+    ScalarT* strainRate,
+    int numPoints
+)
+{
+  const ScalarT* defGradX = deformationGradientX;
+  const ScalarT* defGradY = deformationGradientY;
+  const ScalarT* defGradZ = deformationGradientZ;
+  const ScalarT* defGradDotX = deformationGradientDotX;
+  const ScalarT* defGradDotY = deformationGradientDotY;
+  const ScalarT* defGradDotZ = deformationGradientDotZ;
+
+  ScalarT* Edot = strainRate;
+
+  std::vector<ScalarT> defGradVector(9) ; ScalarT* defGrad = &defGradVector[0];
+  std::vector<ScalarT> defGradDotVector(9) ; ScalarT* defGradDot = &defGradDotVector[0];
+  std::vector<ScalarT> tempVector(9) ; ScalarT* temp = &tempVector[0];
+
+  for(int iID=0 ; iID<numPoints ; ++iID, defGradX+=3, defGradY+=3, defGradZ+=3, 
+      defGradDotX+=3, defGradDotY+=3, defGradDotZ+=3, Edot+=9){
+
+    for(int i=0; i<3; i++){
+      *(defGrad+i+0) = *(defGradX+i);
+      *(defGrad+i+3) = *(defGradY+i);
+      *(defGrad+i+6) = *(defGradZ+i);
+      *(defGradDot+i+0) = *(defGradDotX+i);
+      *(defGradDot+i+3) = *(defGradDotY+i);
+      *(defGradDot+i+6) = *(defGradDotZ+i);
+    }
+
+    // Compute Fdot^T * F
+    MatrixMultiply(true, false, 1.0, defGradDot, defGrad, temp);
+
+    // Edot = 1/2 (Fdot^T * F + F^T * Fdot)
+    for(int i=0; i<3; i++){
+      for(int j=0; j<3; j++){
+        *(Edot+3*i+j) = 0.5 * ( *(temp+3*i+j) + *(temp+3*j+i) );
+      }
+    }
+  }
+}
+
+
+template<typename ScalarT>
+void computeBondLevelStrainRateTensor
+(
+    const double* modelCoordinates,
+    const ScalarT* coordinates,
+    const ScalarT* velocities,
+    const ScalarT* deformationGradientX,
+    const ScalarT* deformationGradientY,
+    const ScalarT* deformationGradientZ,
+    const ScalarT* deformationGradientDotX,
+    const ScalarT* deformationGradientDotY,
+    const ScalarT* deformationGradientDotZ,
+    ScalarT* bondLevelDeformationGradientXX, 
+    ScalarT* bondLevelDeformationGradientXY, 
+    ScalarT* bondLevelDeformationGradientXZ,
+    ScalarT* bondLevelDeformationGradientYX, 
+    ScalarT* bondLevelDeformationGradientYY, 
+    ScalarT* bondLevelDeformationGradientYZ, 
+    ScalarT* bondLevelDeformationGradientZX,
+    ScalarT* bondLevelDeformationGradientZY,
+    ScalarT* bondLevelDeformationGradientZZ,
+    ScalarT* bondLevelStrainRateXX,
+    ScalarT* bondLevelStrainRateXY,
+    ScalarT* bondLevelStrainRateXZ,
+    ScalarT* bondLevelStrainRateYX,
+    ScalarT* bondLevelStrainRateYY,
+    ScalarT* bondLevelStrainRateYZ,
+    ScalarT* bondLevelStrainRateZX,
+    ScalarT* bondLevelStrainRateZY,
+    ScalarT* bondLevelStrainRateZZ,
+    const double* influenceState,
+    const int* neighborhoodList,
+    int numPoints
+)
+{
+  const double* modelCoord = modelCoordinates;
+  const double* neighborModelCoord;
+  const ScalarT* coord = coordinates;
+  const ScalarT* neighborCoord;
+  const ScalarT* vel = velocities;
+  const ScalarT* neighborVel;
+  const ScalarT* defGradX = deformationGradientX;
+  const ScalarT* neighborDefGradX;
+  const ScalarT* defGradY = deformationGradientY;
+  const ScalarT* neighborDefGradY;
+  const ScalarT* defGradZ = deformationGradientZ;
+  const ScalarT* neighborDefGradZ;
+  const ScalarT* defGradDotX = deformationGradientDotX;
+  const ScalarT* neighborDefGradDotX;
+  const ScalarT* defGradDotY = deformationGradientDotY;
+  const ScalarT* neighborDefGradDotY;
+  const ScalarT* defGradDotZ = deformationGradientDotZ;
+  const ScalarT* neighborDefGradDotZ;
+  ScalarT* defGradXX = bondLevelDeformationGradientXX;
+  ScalarT* defGradXY = bondLevelDeformationGradientXY;
+  ScalarT* defGradXZ = bondLevelDeformationGradientXZ;
+  ScalarT* defGradYX = bondLevelDeformationGradientYX;
+  ScalarT* defGradYY = bondLevelDeformationGradientYY;
+  ScalarT* defGradYZ = bondLevelDeformationGradientYZ;
+  ScalarT* defGradZX = bondLevelDeformationGradientZX;
+  ScalarT* defGradZY = bondLevelDeformationGradientZY;
+  ScalarT* defGradZZ = bondLevelDeformationGradientZZ;
+  const double *omega = influenceState;
+  ScalarT* EdotXX = bondLevelStrainRateXX;
+  ScalarT* EdotXY = bondLevelStrainRateXY;
+  ScalarT* EdotXZ = bondLevelStrainRateXZ;
+  ScalarT* EdotYX = bondLevelStrainRateYX;
+  ScalarT* EdotYY = bondLevelStrainRateYY;
+  ScalarT* EdotYZ = bondLevelStrainRateYZ;
+  ScalarT* EdotZX = bondLevelStrainRateZX;
+  ScalarT* EdotZY = bondLevelStrainRateZY;
+  ScalarT* EdotZZ = bondLevelStrainRateZZ;
+
+  std::vector<ScalarT> meanDefGradVector(9); ScalarT* meanDefGrad = &meanDefGradVector[0];
+  std::vector<ScalarT> meanDefGradDotVector(9); ScalarT* meanDefGradDot = &meanDefGradDotVector[0];
+  std::vector<ScalarT> defGradVector(9); ScalarT* defGrad = &defGradVector[0];
+  std::vector<ScalarT> defGradDotVector(9); ScalarT* defGradDot = &defGradDotVector[0];
+  std::vector<ScalarT> EdotVector(9) ; ScalarT* Edot = &EdotVector[0];
+  std::vector<ScalarT> tempVector(9) ; ScalarT* temp = &tempVector[0];
+
+  double undeformedBondX, undeformedBondY, undeformedBondZ, undeformedBondLengthSq;
+  ScalarT defStateX, defStateY, defStateZ;
+  ScalarT velStateX, velStateY, velStateZ;
+  ScalarT scalarTemp;
+
+  int neighborIndex, numNeighbors;
+  const int *neighborListPtr = neighborhoodList;
+  for(int iID=0 ; iID<numPoints ; ++iID, modelCoord+=3, coord+=3, defGradX+=3,
+      defGradY+=3, defGradZ+=3, vel+=3, defGradDotX+=3, defGradDotY+=3, defGradDotZ+=3){
+
+    // All is bond level.
+    numNeighbors = *neighborListPtr; neighborListPtr++;
+    for(int n=0; n<numNeighbors; n++, neighborListPtr++, omega++, 
+        defGradXX++, defGradXY++, defGradXZ++, 
+        defGradYX++, defGradYY++, defGradYZ++, 
+        defGradZX++, defGradZY++, defGradZZ++,
+        EdotXX++, EdotXY++, EdotXZ++,
+        EdotYX++, EdotYY++, EdotYZ++,
+        EdotZX++, EdotZY++, EdotZZ++){
+
+      if(*omega > 0.0){
+        neighborIndex = *neighborListPtr;
+
+        neighborModelCoord = modelCoordinates + 3*neighborIndex;
+        neighborCoord = coordinates + 3*neighborIndex;
+        neighborVel = velocities + 3*neighborIndex;
+        neighborDefGradX = deformationGradientX + 3*neighborIndex;
+        neighborDefGradY = deformationGradientY + 3*neighborIndex;
+        neighborDefGradZ = deformationGradientZ + 3*neighborIndex;
+        neighborDefGradDotX = deformationGradientDotX + 3*neighborIndex;
+        neighborDefGradDotY = deformationGradientDotY + 3*neighborIndex;
+        neighborDefGradDotZ = deformationGradientDotZ + 3*neighborIndex;
+
+        undeformedBondX = *(neighborModelCoord+0) - *(modelCoord+0);
+        undeformedBondY = *(neighborModelCoord+1) - *(modelCoord+1);
+        undeformedBondZ = *(neighborModelCoord+2) - *(modelCoord+2);
+        undeformedBondLengthSq = undeformedBondX*undeformedBondX +
+                                 undeformedBondY*undeformedBondY +
+                                 undeformedBondZ*undeformedBondZ;
+
+        defStateX = *(neighborCoord+0) - *(coord+0);
+        defStateY = *(neighborCoord+1) - *(coord+1);
+        defStateZ = *(neighborCoord+2) - *(coord+2);
+
+        velStateX = *(neighborVel+0) - *(vel+0);
+        velStateY = *(neighborVel+1) - *(vel+1);
+        velStateZ = *(neighborVel+2) - *(vel+2);
+
+        // average of the two points 
+        for(int i=0; i<3; i++){
+          *(meanDefGrad+i+0) = 0.5 * (*(defGradX+i) + *(neighborDefGradX+i));
+          *(meanDefGrad+i+3) = 0.5 * (*(defGradY+i) + *(neighborDefGradY+i));
+          *(meanDefGrad+i+6) = 0.5 * (*(defGradZ+i) + *(neighborDefGradZ+i));
+          *(meanDefGradDot+i+0) = 0.5 * (*(defGradDotX+i) + *(neighborDefGradDotX+i));
+          *(meanDefGradDot+i+3) = 0.5 * (*(defGradDotY+i) + *(neighborDefGradDotY+i));
+          *(meanDefGradDot+i+6) = 0.5 * (*(defGradDotZ+i) + *(neighborDefGradDotZ+i));
+        }
+
+        scalarTemp = *(meanDefGrad+0) * undeformedBondX + *(meanDefGrad+1) * undeformedBondY + *(meanDefGrad+2) * undeformedBondZ;
+        *(defGrad+0) = *(meanDefGrad+0) + (defStateX - scalarTemp) * undeformedBondX/undeformedBondLengthSq;
+        *(defGrad+1) = *(meanDefGrad+1) + (defStateX - scalarTemp) * undeformedBondY/undeformedBondLengthSq;
+        *(defGrad+2) = *(meanDefGrad+2) + (defStateX - scalarTemp) * undeformedBondZ/undeformedBondLengthSq;
+
+        scalarTemp = *(meanDefGrad+3) * undeformedBondX + *(meanDefGrad+4) * undeformedBondY + *(meanDefGrad+5) * undeformedBondZ;
+        *(defGrad+3) = *(meanDefGrad+3) + (defStateY - scalarTemp) * undeformedBondX/undeformedBondLengthSq;
+        *(defGrad+4) = *(meanDefGrad+4) + (defStateY - scalarTemp) * undeformedBondY/undeformedBondLengthSq;
+        *(defGrad+5) = *(meanDefGrad+5) + (defStateY - scalarTemp) * undeformedBondZ/undeformedBondLengthSq;
+
+        scalarTemp = *(meanDefGrad+6) * undeformedBondX + *(meanDefGrad+7) * undeformedBondY + *(meanDefGrad+8) * undeformedBondZ;
+        *(defGrad+6) = *(meanDefGrad+6) + (defStateZ - scalarTemp) * undeformedBondX/undeformedBondLengthSq;
+        *(defGrad+7) = *(meanDefGrad+7) + (defStateZ - scalarTemp) * undeformedBondY/undeformedBondLengthSq;
+        *(defGrad+8) = *(meanDefGrad+8) + (defStateZ - scalarTemp) * undeformedBondZ/undeformedBondLengthSq;
+
+        scalarTemp = *(meanDefGradDot+0) * undeformedBondX + *(meanDefGradDot+1) * undeformedBondY + *(meanDefGradDot+2) * undeformedBondZ;
+        *(defGradDot+0) = *(meanDefGradDot+0) + (velStateX - scalarTemp) * undeformedBondX/undeformedBondLengthSq;
+        *(defGradDot+1) = *(meanDefGradDot+1) + (velStateX - scalarTemp) * undeformedBondY/undeformedBondLengthSq;
+        *(defGradDot+2) = *(meanDefGradDot+2) + (velStateX - scalarTemp) * undeformedBondZ/undeformedBondLengthSq;
+
+        scalarTemp = *(meanDefGradDot+3) * undeformedBondX + *(meanDefGradDot+4) * undeformedBondY + *(meanDefGradDot+5) * undeformedBondZ;
+        *(defGradDot+3) = *(meanDefGradDot+3) + (velStateY - scalarTemp) * undeformedBondX/undeformedBondLengthSq;
+        *(defGradDot+4) = *(meanDefGradDot+4) + (velStateY - scalarTemp) * undeformedBondY/undeformedBondLengthSq;
+        *(defGradDot+5) = *(meanDefGradDot+5) + (velStateY - scalarTemp) * undeformedBondZ/undeformedBondLengthSq;
+
+        scalarTemp = *(meanDefGradDot+6) * undeformedBondX + *(meanDefGradDot+7) * undeformedBondY + *(meanDefGradDot+8) * undeformedBondZ;
+        *(defGradDot+6) = *(meanDefGradDot+6) + (velStateZ - scalarTemp) * undeformedBondX/undeformedBondLengthSq;
+        *(defGradDot+7) = *(meanDefGradDot+7) + (velStateZ - scalarTemp) * undeformedBondY/undeformedBondLengthSq;
+        *(defGradDot+8) = *(meanDefGradDot+8) + (velStateZ - scalarTemp) * undeformedBondZ/undeformedBondLengthSq;
+
+        // Compute Fdot^T * F
+        MatrixMultiply(true, false, 1.0, defGradDot, defGrad, temp);
+
+        // Edot = 1/2 (Fdot^T * F + F^T * Fdot)
+        for(int i=0; i<3; i++){
+          for(int j=0; j<3; j++){
+            *(Edot+3*i+j) = 0.5 * ( *(temp+3*i+j) + *(temp+3*j+i) );
+          }
+        }
+
+        // Store back in element-wise format
+        *(defGradXX) = *(defGrad+0); *(defGradXY) = *(defGrad+1); *(defGradXZ) = *(defGrad+2); 
+        *(defGradYX) = *(defGrad+3); *(defGradYY) = *(defGrad+4); *(defGradYZ) = *(defGrad+5); 
+        *(defGradZX) = *(defGrad+6); *(defGradZY) = *(defGrad+7); *(defGradZZ) = *(defGrad+8); 
+        *EdotXX = *(Edot+0); *EdotXY = *(Edot+1); *EdotXZ = *(Edot+2);
+        *EdotYX = *(Edot+3); *EdotYY = *(Edot+4); *EdotYZ = *(Edot+5);
+        *EdotZX = *(Edot+6); *EdotZY = *(Edot+7); *EdotZZ = *(Edot+8);
+      }
+      else{
+        *EdotXX = 0.0; *EdotXY = 0.0; *EdotXZ = 0.0;
+        *EdotYX = 0.0; *EdotYY = 0.0; *EdotYZ = 0.0;
+        *EdotZX = 0.0; *EdotZY = 0.0; *EdotZZ = 0.0;
+      }
+    }
+  }
+}
+
+
+template<typename ScalarT>
+void updateBondLevelGreenLagrangeStrain
+(
+    const ScalarT* bondLevelStrainXXN,
+    const ScalarT* bondLevelStrainXYN,
+    const ScalarT* bondLevelStrainXZN,
+    const ScalarT* bondLevelStrainYXN,
+    const ScalarT* bondLevelStrainYYN,
+    const ScalarT* bondLevelStrainYZN,
+    const ScalarT* bondLevelStrainZXN,
+    const ScalarT* bondLevelStrainZYN,
+    const ScalarT* bondLevelStrainZZN,
+    const ScalarT* bondLevelStrainRateXX,
+    const ScalarT* bondLevelStrainRateXY,
+    const ScalarT* bondLevelStrainRateXZ,
+    const ScalarT* bondLevelStrainRateYX,
+    const ScalarT* bondLevelStrainRateYY,
+    const ScalarT* bondLevelStrainRateYZ,
+    const ScalarT* bondLevelStrainRateZX,
+    const ScalarT* bondLevelStrainRateZY,
+    const ScalarT* bondLevelStrainRateZZ,
+    ScalarT* bondLevelStrainXXNP1,
+    ScalarT* bondLevelStrainXYNP1,
+    ScalarT* bondLevelStrainXZNP1,
+    ScalarT* bondLevelStrainYXNP1,
+    ScalarT* bondLevelStrainYYNP1,
+    ScalarT* bondLevelStrainYZNP1,
+    ScalarT* bondLevelStrainZXNP1,
+    ScalarT* bondLevelStrainZYNP1,
+    ScalarT* bondLevelStrainZZNP1,
+    const int* neighborhoodList,
+    int numPoints,
+    double dt
+)
+{
+  const ScalarT* EXXN = bondLevelStrainXXN;
+  const ScalarT* EXYN = bondLevelStrainXYN;
+  const ScalarT* EXZN = bondLevelStrainXZN;
+  const ScalarT* EYXN = bondLevelStrainYXN;
+  const ScalarT* EYYN = bondLevelStrainYYN;
+  const ScalarT* EYZN = bondLevelStrainYZN;
+  const ScalarT* EZXN = bondLevelStrainZXN;
+  const ScalarT* EZYN = bondLevelStrainZYN;
+  const ScalarT* EZZN = bondLevelStrainZZN;
+  const ScalarT* EdotXX = bondLevelStrainRateXX;
+  const ScalarT* EdotXY = bondLevelStrainRateXY;
+  const ScalarT* EdotXZ = bondLevelStrainRateXZ;
+  const ScalarT* EdotYX = bondLevelStrainRateYX;
+  const ScalarT* EdotYY = bondLevelStrainRateYY;
+  const ScalarT* EdotYZ = bondLevelStrainRateYZ;
+  const ScalarT* EdotZX = bondLevelStrainRateZX;
+  const ScalarT* EdotZY = bondLevelStrainRateZY;
+  const ScalarT* EdotZZ = bondLevelStrainRateZZ;
+  ScalarT* EXXNP1 = bondLevelStrainXXNP1;
+  ScalarT* EXYNP1 = bondLevelStrainXYNP1;
+  ScalarT* EXZNP1 = bondLevelStrainXZNP1;
+  ScalarT* EYXNP1 = bondLevelStrainYXNP1;
+  ScalarT* EYYNP1 = bondLevelStrainYYNP1;
+  ScalarT* EYZNP1 = bondLevelStrainYZNP1;
+  ScalarT* EZXNP1 = bondLevelStrainZXNP1;
+  ScalarT* EZYNP1 = bondLevelStrainZYNP1;
+  ScalarT* EZZNP1 = bondLevelStrainZZNP1;
+
+  int neighborIndex, numNeighbors;
+  const int *neighborListPtr = neighborhoodList;
+  for(int iID=0 ; iID<numPoints ; ++iID){
+
+    // All is bond level.
+    numNeighbors = *neighborListPtr; neighborListPtr++;
+    for(int n=0; n<numNeighbors; n++, neighborListPtr++, 
+        EXXN++, EXYN++, EXZN++,
+        EYXN++, EYYN++, EYZN++,
+        EZXN++, EZYN++, EZZN++,
+        EdotXX++, EdotXY++, EdotXZ++,
+        EdotYX++, EdotYY++, EdotYZ++,
+        EdotZX++, EdotZY++, EdotZZ++,
+        EXXNP1++, EXYNP1++, EXZNP1++,
+        EYXNP1++, EYYNP1++, EYZNP1++,
+        EZXNP1++, EZYNP1++, EZZNP1++){
+
+      *EXXNP1 = *EXXN + *EdotXX * dt;
+      *EXYNP1 = *EXYN + *EdotXY * dt;
+      *EXZNP1 = *EXZN + *EdotXZ * dt;
+      *EYXNP1 = *EYXN + *EdotYX * dt;
+      *EYYNP1 = *EYYN + *EdotYY * dt;
+      *EYZNP1 = *EYZN + *EdotYZ * dt;
+      *EZXNP1 = *EZXN + *EdotZX * dt;
+      *EZYNP1 = *EZYN + *EdotZY * dt;
+      *EZZNP1 = *EZZN + *EdotZZ * dt;
     }
   }
 }
@@ -4358,6 +4757,131 @@ void computeBondLevelPiolaStress
 
       //P = J * \sigma * F^(-T)
       MatrixMultiply(false, true, *J, cauchyStress, defGradInv, piolaStress);
+
+      *piolaStressXX = piolaStress[0];
+      *piolaStressXY = piolaStress[1];
+      *piolaStressXZ = piolaStress[2];
+      *piolaStressYX = piolaStress[3];
+      *piolaStressYY = piolaStress[4];
+      *piolaStressYZ = piolaStress[5];
+      *piolaStressZX = piolaStress[6];
+      *piolaStressZY = piolaStress[7];
+      *piolaStressZZ = piolaStress[8];
+    }
+  }
+}
+
+
+template<typename ScalarT>
+void computeBondLevelFirstPiolaStress
+(
+    const ScalarT* bondLevelPK2StressXX,
+    const ScalarT* bondLevelPK2StressXY,
+    const ScalarT* bondLevelPK2StressXZ,
+    const ScalarT* bondLevelPK2StressYX,
+    const ScalarT* bondLevelPK2StressYY,
+    const ScalarT* bondLevelPK2StressYZ,
+    const ScalarT* bondLevelPK2StressZX,
+    const ScalarT* bondLevelPK2StressZY,
+    const ScalarT* bondLevelPK2StressZZ,
+    const ScalarT* bondLevelDeformationGradientXX,
+    const ScalarT* bondLevelDeformationGradientXY,
+    const ScalarT* bondLevelDeformationGradientXZ,
+    const ScalarT* bondLevelDeformationGradientYX,
+    const ScalarT* bondLevelDeformationGradientYY,
+    const ScalarT* bondLevelDeformationGradientYZ,
+    const ScalarT* bondLevelDeformationGradientZX,
+    const ScalarT* bondLevelDeformationGradientZY,
+    const ScalarT* bondLevelDeformationGradientZZ,
+    ScalarT* bondLevelPiolaStressXX,
+    ScalarT* bondLevelPiolaStressXY,
+    ScalarT* bondLevelPiolaStressXZ,
+    ScalarT* bondLevelPiolaStressYX,
+    ScalarT* bondLevelPiolaStressYY,
+    ScalarT* bondLevelPiolaStressYZ,
+    ScalarT* bondLevelPiolaStressZX,
+    ScalarT* bondLevelPiolaStressZY,
+    ScalarT* bondLevelPiolaStressZZ,
+    const int* neighborhoodList,
+    int numPoints
+)
+{
+  const ScalarT* PK2StressXX = bondLevelPK2StressXX;
+  const ScalarT* PK2StressXY = bondLevelPK2StressXY;
+  const ScalarT* PK2StressXZ = bondLevelPK2StressXZ;
+  const ScalarT* PK2StressYX = bondLevelPK2StressYX;
+  const ScalarT* PK2StressYY = bondLevelPK2StressYY;
+  const ScalarT* PK2StressYZ = bondLevelPK2StressYZ;
+  const ScalarT* PK2StressZX = bondLevelPK2StressZX;
+  const ScalarT* PK2StressZY = bondLevelPK2StressZY;
+  const ScalarT* PK2StressZZ = bondLevelPK2StressZZ;
+  const ScalarT* defGradXX = bondLevelDeformationGradientXX;
+  const ScalarT* defGradXY = bondLevelDeformationGradientXY;
+  const ScalarT* defGradXZ = bondLevelDeformationGradientXZ;
+  const ScalarT* defGradYX = bondLevelDeformationGradientYX;
+  const ScalarT* defGradYY = bondLevelDeformationGradientYY;
+  const ScalarT* defGradYZ = bondLevelDeformationGradientYZ;
+  const ScalarT* defGradZX = bondLevelDeformationGradientZX;
+  const ScalarT* defGradZY = bondLevelDeformationGradientZY;
+  const ScalarT* defGradZZ = bondLevelDeformationGradientZZ;
+  ScalarT* piolaStressXX = bondLevelPiolaStressXX;
+  ScalarT* piolaStressXY = bondLevelPiolaStressXY;
+  ScalarT* piolaStressXZ = bondLevelPiolaStressXZ;
+  ScalarT* piolaStressYX = bondLevelPiolaStressYX;
+  ScalarT* piolaStressYY = bondLevelPiolaStressYY;
+  ScalarT* piolaStressYZ = bondLevelPiolaStressYZ;
+  ScalarT* piolaStressZX = bondLevelPiolaStressZX;
+  ScalarT* piolaStressZY = bondLevelPiolaStressZY;
+  ScalarT* piolaStressZZ = bondLevelPiolaStressZZ;
+
+  std::vector<ScalarT> PK2StressVector(9);
+  ScalarT* PK2Stress = &PK2StressVector[0];
+
+  std::vector<ScalarT> defGradVector(9);
+  ScalarT* defGrad = &defGradVector[0];
+
+  std::vector<ScalarT> piolaStressVector(9);
+  ScalarT* piolaStress = &piolaStressVector[0];
+
+  int numNeighbors;
+  const int *neighborListPtr = neighborhoodList;
+  for(int iID=0 ; iID<numPoints ; ++iID){
+
+    // All is bond level.
+    numNeighbors = *neighborListPtr; neighborListPtr++;
+    for(int n=0; n<numNeighbors; n++, neighborListPtr++, 
+        PK2StressXX++, PK2StressXY++, PK2StressXZ++, 
+        PK2StressYX++, PK2StressYY++, PK2StressYZ++, 
+        PK2StressZX++, PK2StressZY++, PK2StressZZ++, 
+        defGradXX++, defGradXY++, defGradXZ++, 
+        defGradYX++, defGradYY++, defGradYZ++, 
+        defGradZX++, defGradZY++, defGradZZ++, 
+        piolaStressXX++, piolaStressXY++, piolaStressXZ++, 
+        piolaStressYX++, piolaStressYY++, piolaStressYZ++, 
+        piolaStressZX++, piolaStressZY++, piolaStressZZ++){
+
+      PK2Stress[0] = *PK2StressXX;
+      PK2Stress[1] = *PK2StressXY;
+      PK2Stress[2] = *PK2StressXZ;
+      PK2Stress[3] = *PK2StressYX;
+      PK2Stress[4] = *PK2StressYY;
+      PK2Stress[5] = *PK2StressYZ;
+      PK2Stress[6] = *PK2StressZX;
+      PK2Stress[7] = *PK2StressZY;
+      PK2Stress[8] = *PK2StressZZ;
+
+      defGrad[0] = *defGradXX;
+      defGrad[1] = *defGradXY;
+      defGrad[2] = *defGradXZ;
+      defGrad[3] = *defGradYX;
+      defGrad[4] = *defGradYY;
+      defGrad[5] = *defGradYZ;
+      defGrad[6] = *defGradZX;
+      defGrad[7] = *defGradZY;
+      defGrad[8] = *defGradZZ;
+
+      //P = F * S
+      MatrixMultiply(false, false, 1.0, defGrad, PK2Stress, piolaStress);
 
       *piolaStressXX = piolaStress[0];
       *piolaStressXY = piolaStress[1];
@@ -4613,6 +5137,12 @@ template void computeHourglassForce<double>
 );
 
 template void setOnesOnDiagonalFullTensor<double>
+(
+    double* tensor,
+    int numPoints
+);
+
+template void setIdentityFullTensor<double>
 (
     double* tensor,
     int numPoints
@@ -4948,6 +5478,27 @@ template void computeWeightedVolume<double>
     int numPoints
 );
 
+template void updateGreenLagrangeStrain<double>
+(
+    const double* deformationGradientX,
+    const double* deformationGradientY,
+    const double* deformationGradientZ,
+    const double* deformationGradientDotX,
+    const double* deformationGradientDotY,
+    const double* deformationGradientDotZ,
+    const double* greenLagrangeStrainN,
+    double* greenLagrangeStrainNP1,
+    int numPoints,
+    double dt
+);
+
+template void computePrincipalStrains<double>
+(
+    const double* strain,
+    double* principalStrains,
+    int numPoints
+);
+
 template int computeNodeLevelUnrotatedRateOfDeformationAndRotationTensor<double>
 (
     const double* deformationGradientX,
@@ -5037,20 +5588,6 @@ template int computeBondLevelUnrotatedRateOfDeformationAndRotationTensor<double>
     double dt
 );
 
-template void updateGreenLagrangeStrain<double>
-(
-    const double* deformationGradientX,
-    const double* deformationGradientY,
-    const double* deformationGradientZ,
-    const double* deformationGradientDotX,
-    const double* deformationGradientDotY,
-    const double* deformationGradientDotZ,
-    const double* greenLagrangeStrainN,
-    double* greenLagrangeStrainNP1,
-    int numPoints,
-    double dt
-);
-
 template void rotateBondLevelCauchyStress
 (
     const double* bondLevelRotationTensorXX,
@@ -5084,6 +5621,40 @@ template void rotateBondLevelCauchyStress
     int numPoints
 );
 
+template void updateBondLevelGreenLagrangeStrain<double>
+(
+    const double* bondLevelStrainXXN,
+    const double* bondLevelStrainXYN,
+    const double* bondLevelStrainXZN,
+    const double* bondLevelStrainYXN,
+    const double* bondLevelStrainYYN,
+    const double* bondLevelStrainYZN,
+    const double* bondLevelStrainZXN,
+    const double* bondLevelStrainZYN,
+    const double* bondLevelStrainZZN,
+    const double* bondLevelStrainRateXX,
+    const double* bondLevelStrainRateXY,
+    const double* bondLevelStrainRateXZ,
+    const double* bondLevelStrainRateYX,
+    const double* bondLevelStrainRateYY,
+    const double* bondLevelStrainRateYZ,
+    const double* bondLevelStrainRateZX,
+    const double* bondLevelStrainRateZY,
+    const double* bondLevelStrainRateZZ,
+    double* bondLevelStrainXXNP1,
+    double* bondLevelStrainXYNP1,
+    double* bondLevelStrainXZNP1,
+    double* bondLevelStrainYXNP1,
+    double* bondLevelStrainYYNP1,
+    double* bondLevelStrainYZNP1,
+    double* bondLevelStrainZXNP1,
+    double* bondLevelStrainZYNP1,
+    double* bondLevelStrainZZNP1,
+    const int* neighborhoodList,
+    int numPoints,
+    double dt
+);
+
 template void computeBondLevelPiolaStress<double>
 (
     const double* bondLevelJacobianDeterminant,
@@ -5105,6 +5676,85 @@ template void computeBondLevelPiolaStress<double>
     const double* bondLevelDeformationGradientInvZX,
     const double* bondLevelDeformationGradientInvZY,
     const double* bondLevelDeformationGradientInvZZ,
+    double* bondLevelPiolaStressXX,
+    double* bondLevelPiolaStressXY,
+    double* bondLevelPiolaStressXZ,
+    double* bondLevelPiolaStressYX,
+    double* bondLevelPiolaStressYY,
+    double* bondLevelPiolaStressYZ,
+    double* bondLevelPiolaStressZX,
+    double* bondLevelPiolaStressZY,
+    double* bondLevelPiolaStressZZ,
+    const int* neighborhoodList,
+    int numPoints
+);
+
+template void computeStrainRateTensor<double>
+(
+    const double* deformationGradientX,
+    const double* deformationGradientY,
+    const double* deformationGradientZ,
+    const double* deformationGradientDotX,
+    const double* deformationGradientDotY,
+    const double* deformationGradientDotZ,
+    double* strainRate,
+    int numPoints
+);
+
+template void computeBondLevelStrainRateTensor<double>
+(
+    const double* modelCoordinates,
+    const double* coordinates,
+    const double* velocities,
+    const double* deformationGradientX,
+    const double* deformationGradientY,
+    const double* deformationGradientZ,
+    const double* deformationGradientDotX,
+    const double* deformationGradientDotY,
+    const double* deformationGradientDotZ,
+    double* bondLevelDeformationGradientXX, 
+    double* bondLevelDeformationGradientXY, 
+    double* bondLevelDeformationGradientXZ,
+    double* bondLevelDeformationGradientYX, 
+    double* bondLevelDeformationGradientYY, 
+    double* bondLevelDeformationGradientYZ, 
+    double* bondLevelDeformationGradientZX,
+    double* bondLevelDeformationGradientZY,
+    double* bondLevelDeformationGradientZZ,
+    double* bondLevelStrainRateXX,
+    double* bondLevelStrainRateXY,
+    double* bondLevelStrainRateXZ,
+    double* bondLevelStrainRateYX,
+    double* bondLevelStrainRateYY,
+    double* bondLevelStrainRateYZ,
+    double* bondLevelStrainRateZX,
+    double* bondLevelStrainRateZY,
+    double* bondLevelStrainRateZZ,
+    const double* influenceState,
+    const int* neighborhoodList,
+    int numPoints
+);
+
+template void computeBondLevelFirstPiolaStress<double>
+(
+    const double* bondLevelPK2StressXX,
+    const double* bondLevelPK2StressXY,
+    const double* bondLevelPK2StressXZ,
+    const double* bondLevelPK2StressYX,
+    const double* bondLevelPK2StressYY,
+    const double* bondLevelPK2StressYZ,
+    const double* bondLevelPK2StressZX,
+    const double* bondLevelPK2StressZY,
+    const double* bondLevelPK2StressZZ,
+    const double* bondLevelDeformationGradientXX,
+    const double* bondLevelDeformationGradientXY,
+    const double* bondLevelDeformationGradientXZ,
+    const double* bondLevelDeformationGradientYX,
+    const double* bondLevelDeformationGradientYY,
+    const double* bondLevelDeformationGradientYZ,
+    const double* bondLevelDeformationGradientZX,
+    const double* bondLevelDeformationGradientZY,
+    const double* bondLevelDeformationGradientZZ,
     double* bondLevelPiolaStressXX,
     double* bondLevelPiolaStressXY,
     double* bondLevelPiolaStressXZ,

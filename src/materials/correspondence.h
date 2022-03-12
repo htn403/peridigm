@@ -182,6 +182,9 @@ template<typename ScalarT>
 void setOnesOnDiagonalFullTensor(ScalarT* tensor, int numPoints);
 
 template<typename ScalarT>
+void setIdentityFullTensor(ScalarT* tensor, int numPoints);
+
+template<typename ScalarT>
 int computeSymmetrixMatrixInverse
 (
     const ScalarT* matrix,
@@ -548,6 +551,29 @@ void computeWeightedVolume
 );
 
 template<typename ScalarT>
+void updateGreenLagrangeStrain
+(
+    const ScalarT* deformationGradientX,
+    const ScalarT* deformationGradientY,
+    const ScalarT* deformationGradientZ,
+    const ScalarT* deformationGradientDotX,
+    const ScalarT* deformationGradientDotY,
+    const ScalarT* deformationGradientDotZ,
+    const ScalarT* greenLagrangeStrainN,
+    ScalarT* greenLagrangeStrainNP1,
+    int numPoints,
+    double dt
+);
+
+template<typename ScalarT>
+void computePrincipalStrains
+(
+    const ScalarT* strain,
+    ScalarT* principalStrains,
+    int numPoints
+);
+
+template<typename ScalarT>
 int computeNodeLevelUnrotatedRateOfDeformationAndRotationTensor
 (
     const ScalarT* deformationGradientX,
@@ -639,21 +665,6 @@ int computeBondLevelUnrotatedRateOfDeformationAndRotationTensor
 );
 
 template<typename ScalarT>
-void updateGreenLagrangeStrain
-(
-    const ScalarT* deformationGradientX,
-    const ScalarT* deformationGradientY,
-    const ScalarT* deformationGradientZ,
-    const ScalarT* deformationGradientDotX,
-    const ScalarT* deformationGradientDotY,
-    const ScalarT* deformationGradientDotZ,
-    const ScalarT* greenLagrangeStrainN,
-    ScalarT* greenLagrangeStrainNP1,
-    int numPoints,
-    double dt
-);
-
-template<typename ScalarT>
 void rotateBondLevelCauchyStress
 (
     const ScalarT* bondLevelRotationTensorXX,
@@ -709,6 +720,123 @@ void computeBondLevelPiolaStress
     const ScalarT* bondLevelDeformationGradientInvZX,
     const ScalarT* bondLevelDeformationGradientInvZY,
     const ScalarT* bondLevelDeformationGradientInvZZ,
+    ScalarT* bondLevelPiolaStressXX,
+    ScalarT* bondLevelPiolaStressXY,
+    ScalarT* bondLevelPiolaStressXZ,
+    ScalarT* bondLevelPiolaStressYX,
+    ScalarT* bondLevelPiolaStressYY,
+    ScalarT* bondLevelPiolaStressYZ,
+    ScalarT* bondLevelPiolaStressZX,
+    ScalarT* bondLevelPiolaStressZY,
+    ScalarT* bondLevelPiolaStressZZ,
+    const int* neighborhoodList,
+    int numPoints
+);
+
+template<typename ScalarT>
+void computeStrainRateTensor
+(
+    const ScalarT* deformationGradientX,
+    const ScalarT* deformationGradientY,
+    const ScalarT* deformationGradientZ,
+    const ScalarT* deformationGradientDotX,
+    const ScalarT* deformationGradientDotY,
+    const ScalarT* deformationGradientDotZ,
+    ScalarT* strainRate,
+    int numPoints
+);
+
+template<typename ScalarT>
+void computeBondLevelStrainRateTensor
+(
+    const double* modelCoordinates,
+    const ScalarT* coordinates,
+    const ScalarT* velocities,
+    const ScalarT* deformationGradientX,
+    const ScalarT* deformationGradientY,
+    const ScalarT* deformationGradientZ,
+    const ScalarT* deformationGradientDotX,
+    const ScalarT* deformationGradientDotY,
+    const ScalarT* deformationGradientDotZ,
+    ScalarT* bondLevelDeformationGradientXX, 
+    ScalarT* bondLevelDeformationGradientXY, 
+    ScalarT* bondLevelDeformationGradientXZ,
+    ScalarT* bondLevelDeformationGradientYX, 
+    ScalarT* bondLevelDeformationGradientYY, 
+    ScalarT* bondLevelDeformationGradientYZ, 
+    ScalarT* bondLevelDeformationGradientZX,
+    ScalarT* bondLevelDeformationGradientZY,
+    ScalarT* bondLevelDeformationGradientZZ,
+    ScalarT* bondLevelStrainRateXX,
+    ScalarT* bondLevelStrainRateXY,
+    ScalarT* bondLevelStrainRateXZ,
+    ScalarT* bondLevelStrainRateYX,
+    ScalarT* bondLevelStrainRateYY,
+    ScalarT* bondLevelStrainRateYZ,
+    ScalarT* bondLevelStrainRateZX,
+    ScalarT* bondLevelStrainRateZY,
+    ScalarT* bondLevelStrainRateZZ,
+    const double* influenceState,
+    const int* neighborhoodList,
+    int numPoints
+);
+
+template<typename ScalarT>
+void updateBondLevelGreenLagrangeStrain
+(
+    const ScalarT* bondLevelStrainXXN,
+    const ScalarT* bondLevelStrainXYN,
+    const ScalarT* bondLevelStrainXZN,
+    const ScalarT* bondLevelStrainYXN,
+    const ScalarT* bondLevelStrainYYN,
+    const ScalarT* bondLevelStrainYZN,
+    const ScalarT* bondLevelStrainZXN,
+    const ScalarT* bondLevelStrainZYN,
+    const ScalarT* bondLevelStrainZZN,
+    const ScalarT* bondLevelStrainRateXX,
+    const ScalarT* bondLevelStrainRateXY,
+    const ScalarT* bondLevelStrainRateXZ,
+    const ScalarT* bondLevelStrainRateYX,
+    const ScalarT* bondLevelStrainRateYY,
+    const ScalarT* bondLevelStrainRateYZ,
+    const ScalarT* bondLevelStrainRateZX,
+    const ScalarT* bondLevelStrainRateZY,
+    const ScalarT* bondLevelStrainRateZZ,
+    ScalarT* bondLevelStrainXXNP1,
+    ScalarT* bondLevelStrainXYNP1,
+    ScalarT* bondLevelStrainXZNP1,
+    ScalarT* bondLevelStrainYXNP1,
+    ScalarT* bondLevelStrainYYNP1,
+    ScalarT* bondLevelStrainYZNP1,
+    ScalarT* bondLevelStrainZXNP1,
+    ScalarT* bondLevelStrainZYNP1,
+    ScalarT* bondLevelStrainZZNP1,
+    const int* neighborhoodList,
+    int numPoints,
+    double dt
+);
+
+template<typename ScalarT>
+void computeBondLevelFirstPiolaStress
+(
+    const ScalarT* bondLevelPK2StressXX,
+    const ScalarT* bondLevelPK2StressXY,
+    const ScalarT* bondLevelPK2StressXZ,
+    const ScalarT* bondLevelPK2StressYX,
+    const ScalarT* bondLevelPK2StressYY,
+    const ScalarT* bondLevelPK2StressYZ,
+    const ScalarT* bondLevelPK2StressZX,
+    const ScalarT* bondLevelPK2StressZY,
+    const ScalarT* bondLevelPK2StressZZ,
+    const ScalarT* bondLevelDeformationGradientXX,
+    const ScalarT* bondLevelDeformationGradientXY,
+    const ScalarT* bondLevelDeformationGradientXZ,
+    const ScalarT* bondLevelDeformationGradientYX,
+    const ScalarT* bondLevelDeformationGradientYY,
+    const ScalarT* bondLevelDeformationGradientYZ,
+    const ScalarT* bondLevelDeformationGradientZX,
+    const ScalarT* bondLevelDeformationGradientZY,
+    const ScalarT* bondLevelDeformationGradientZZ,
     ScalarT* bondLevelPiolaStressXX,
     ScalarT* bondLevelPiolaStressXY,
     ScalarT* bondLevelPiolaStressXZ,

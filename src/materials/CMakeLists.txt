@@ -15,9 +15,13 @@ set(PD_MATERIAL_SOURCES
     elastic_plastic_correspondence.cxx
     isotropic_hardening_correspondence.cxx
     viscoplastic_needleman_correspondence.cxx
+    microplane_correspondence.cxx
+    cdpm2_correspondence.cxx
     material_utilities.cxx
     nonlocal_diffusion.cxx
     pals.cxx
+    m7fmaterial.f
+    cdpm2material.f
 )
 
 # Optional source files for Sandia internal development

@@ -62,6 +62,9 @@
 #include "Peridigm_ElasticBondAssociatedCorrespondenceMaterial.hpp"
 #include "Peridigm_ElasticPlasticBondAssociatedCorrespondenceMaterial.hpp"
 #include "Peridigm_IsotropicHardeningPlasticBondAssociatedCorrespondenceMaterial.hpp"
+#include "Peridigm_MicroplaneBondAssociatedCorrespondenceMaterial.hpp"
+#include "Peridigm_CDPM2BondAssociatedCorrespondenceMaterial.hpp"
+#include "Peridigm_CDPM2CorrespondenceMaterial.hpp"
 #include "Peridigm_LCMMaterial.hpp"
 #include "Peridigm_ElasticBondBasedMaterial.hpp"
 #include "Peridigm_VectorPoissonMaterial.hpp"
@@ -114,6 +117,12 @@ PeridigmNS::MaterialFactory::create(const Teuchos::ParameterList& materialParams
     materialModel = Teuchos::rcp( new ElasticPlasticBondAssociatedCorrespondenceMaterial(materialParams) );
   else if (materialModelName == "Isotropic Hardening Bond Associated Correspondence")
     materialModel = Teuchos::rcp( new IsotropicHardeningPlasticBondAssociatedCorrespondenceMaterial(materialParams) );
+  else if (materialModelName == "Microplane Bond Associated Correspondence")
+    materialModel = Teuchos::rcp( new MicroplaneBondAssociatedCorrespondenceMaterial(materialParams) );
+  else if (materialModelName == "CDPM2 Bond Associated Correspondence")
+    materialModel = Teuchos::rcp( new CDPM2BondAssociatedCorrespondenceMaterial(materialParams) );
+  else if (materialModelName == "CDPM2 Correspondence")
+    materialModel = Teuchos::rcp( new CDPM2CorrespondenceMaterial(materialParams) );
   else if (materialModelName == "LCM")
     materialModel = Teuchos::rcp( new LCMMaterial(materialParams) );
   else if (materialModelName == "Elastic Bond Based")

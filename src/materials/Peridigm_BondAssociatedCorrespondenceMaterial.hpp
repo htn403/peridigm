@@ -109,6 +109,12 @@ namespace PeridigmNS {
                                      const int* neighborhoodList,
                                      PeridigmNS::DataManager& dataManager) const = 0;
 
+    //! Evaluate the second Piola-Kirchhoff stress (pure virtual function, must be implemented by derived correspondence material models).
+    virtual void computePK2Stress(const double dt,
+                                  const int numOwnedPoints,
+                                  const int* neighborhoodList,
+                                  PeridigmNS::DataManager& dataManager) const = 0;
+
     //! Evaluate the internal force.
     virtual void computeForce(const double dt,
                               const int numOwnedPoints,
@@ -125,6 +131,9 @@ namespace PeridigmNS {
                PeridigmNS::DataManager& dataManager) const;
 
   protected:
+
+    // flag indicating which type of stress is used in the update. 
+    bool m_calculateCauchyStress;
 
     // material parameters
     double m_bulkModulus;
@@ -145,6 +154,7 @@ namespace PeridigmNS {
     int m_damageFieldId;
     int m_bondDamageFieldId;
     int m_influenceStateFieldId;
+    int m_weightedVolumeFieldId;
     int m_gradientWeightXFieldId;
     int m_gradientWeightYFieldId;
     int m_gradientWeightZFieldId;
@@ -156,12 +166,36 @@ namespace PeridigmNS {
     int m_deformationGradientDotYFieldId;
     int m_deformationGradientDotZFieldId;
     int m_greenLagrangeStrainFieldId;
+    int m_principalStrainsFieldId;
+
+    int m_unrotatedRateOfDeformationFieldId;
     int m_leftStretchTensorFieldId;
     int m_rotationTensorFieldId;
     int m_unrotatedCauchyStressFieldId;
     int m_cauchyStressFieldId;
-    int m_unrotatedRateOfDeformationFieldId;
-    int m_weightedVolumeFieldId;
+
+    int m_strainRateFieldId;
+    int m_PK2StressFieldId;
+
+    int m_bondLevelUnrotatedCauchyStressXXFieldId;
+    int m_bondLevelUnrotatedCauchyStressXYFieldId;
+    int m_bondLevelUnrotatedCauchyStressXZFieldId;
+    int m_bondLevelUnrotatedCauchyStressYXFieldId;
+    int m_bondLevelUnrotatedCauchyStressYYFieldId;
+    int m_bondLevelUnrotatedCauchyStressYZFieldId;
+    int m_bondLevelUnrotatedCauchyStressZXFieldId;
+    int m_bondLevelUnrotatedCauchyStressZYFieldId;
+    int m_bondLevelUnrotatedCauchyStressZZFieldId;
+    int m_bondLevelPiolaStressXXFieldId;
+    int m_bondLevelPiolaStressXYFieldId;
+    int m_bondLevelPiolaStressXZFieldId;
+    int m_bondLevelPiolaStressYXFieldId;
+    int m_bondLevelPiolaStressYYFieldId;
+    int m_bondLevelPiolaStressYZFieldId;
+    int m_bondLevelPiolaStressZXFieldId;
+    int m_bondLevelPiolaStressZYFieldId;
+    int m_bondLevelPiolaStressZZFieldId;
+    int m_stressIntegralFieldId;
 
     int m_bondLevelLeftStretchTensorXXFieldId;
     int m_bondLevelLeftStretchTensorXYFieldId;
@@ -181,15 +215,6 @@ namespace PeridigmNS {
     int m_bondLevelRotationTensorZXFieldId;
     int m_bondLevelRotationTensorZYFieldId;
     int m_bondLevelRotationTensorZZFieldId;
-    int m_bondLevelUnrotatedCauchyStressXXFieldId;
-    int m_bondLevelUnrotatedCauchyStressXYFieldId;
-    int m_bondLevelUnrotatedCauchyStressXZFieldId;
-    int m_bondLevelUnrotatedCauchyStressYXFieldId;
-    int m_bondLevelUnrotatedCauchyStressYYFieldId;
-    int m_bondLevelUnrotatedCauchyStressYZFieldId;
-    int m_bondLevelUnrotatedCauchyStressZXFieldId;
-    int m_bondLevelUnrotatedCauchyStressZYFieldId;
-    int m_bondLevelUnrotatedCauchyStressZZFieldId;
     int m_bondLevelCauchyStressXXFieldId;
     int m_bondLevelCauchyStressXYFieldId;
     int m_bondLevelCauchyStressXZFieldId;
@@ -208,15 +233,6 @@ namespace PeridigmNS {
     int m_bondLevelUnrotatedRateOfDeformationZXFieldId;
     int m_bondLevelUnrotatedRateOfDeformationZYFieldId;
     int m_bondLevelUnrotatedRateOfDeformationZZFieldId;
-    int m_bondLevelPiolaStressXXFieldId;
-    int m_bondLevelPiolaStressXYFieldId;
-    int m_bondLevelPiolaStressXZFieldId;
-    int m_bondLevelPiolaStressYXFieldId;
-    int m_bondLevelPiolaStressYYFieldId;
-    int m_bondLevelPiolaStressYZFieldId;
-    int m_bondLevelPiolaStressZXFieldId;
-    int m_bondLevelPiolaStressZYFieldId;
-    int m_bondLevelPiolaStressZZFieldId;
     int m_bondLevelDeformationGradientInvXXFieldId;
     int m_bondLevelDeformationGradientInvXYFieldId;
     int m_bondLevelDeformationGradientInvXZFieldId;
@@ -227,7 +243,43 @@ namespace PeridigmNS {
     int m_bondLevelDeformationGradientInvZYFieldId;
     int m_bondLevelDeformationGradientInvZZFieldId;
     int m_bondLevelJacobianDeterminantFieldId;
-    int m_stressIntegralFieldId;
+
+    int m_bondLevelStrainRateXXFieldId;
+    int m_bondLevelStrainRateXYFieldId;
+    int m_bondLevelStrainRateXZFieldId;
+    int m_bondLevelStrainRateYXFieldId;
+    int m_bondLevelStrainRateYYFieldId;
+    int m_bondLevelStrainRateYZFieldId;
+    int m_bondLevelStrainRateZXFieldId;
+    int m_bondLevelStrainRateZYFieldId;
+    int m_bondLevelStrainRateZZFieldId;
+    int m_bondLevelStrainXXFieldId;
+    int m_bondLevelStrainXYFieldId;
+    int m_bondLevelStrainXZFieldId;
+    int m_bondLevelStrainYXFieldId;
+    int m_bondLevelStrainYYFieldId;
+    int m_bondLevelStrainYZFieldId;
+    int m_bondLevelStrainZXFieldId;
+    int m_bondLevelStrainZYFieldId;
+    int m_bondLevelStrainZZFieldId;
+    int m_bondLevelPK2StressXXFieldId;
+    int m_bondLevelPK2StressXYFieldId;
+    int m_bondLevelPK2StressXZFieldId;
+    int m_bondLevelPK2StressYXFieldId;
+    int m_bondLevelPK2StressYYFieldId;
+    int m_bondLevelPK2StressYZFieldId;
+    int m_bondLevelPK2StressZXFieldId;
+    int m_bondLevelPK2StressZYFieldId;
+    int m_bondLevelPK2StressZZFieldId;
+    int m_bondLevelDeformationGradientXXFieldId;
+    int m_bondLevelDeformationGradientXYFieldId;
+    int m_bondLevelDeformationGradientXZFieldId;
+    int m_bondLevelDeformationGradientYXFieldId;
+    int m_bondLevelDeformationGradientYYFieldId;
+    int m_bondLevelDeformationGradientYZFieldId;
+    int m_bondLevelDeformationGradientZXFieldId;
+    int m_bondLevelDeformationGradientZYFieldId;
+    int m_bondLevelDeformationGradientZZFieldId;
   };
 }
 

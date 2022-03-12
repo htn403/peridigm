@@ -118,7 +118,7 @@ PeridigmNS::ElasticPlasticBondAssociatedCorrespondenceMaterial::computeCauchyStr
                                                                                     const int numOwnedPoints,
                                                                                     const int* neighborhoodList,
                                                                                     PeridigmNS::DataManager& dataManager) const
-  {
+{
 
   // Compute the node-level stress values
   // This is only done for output (visualization) purposes
@@ -225,6 +225,130 @@ PeridigmNS::ElasticPlasticBondAssociatedCorrespondenceMaterial::computeCauchyStr
                                                                      bondLevelUnrotatedCauchyStressZXNP1, 
                                                                      bondLevelUnrotatedCauchyStressZYNP1, 
                                                                      bondLevelUnrotatedCauchyStressZZNP1, 
+                                                                     bondLevelVonMisesStress,
+                                                                     bondLevelEquivalentPlasticStrainN,
+                                                                     bondLevelEquivalentPlasticStrainNP1,
+                                                                     bondLevelStressTriaxiality,
+                                                                     neighborhoodList,
+                                                                     numOwnedPoints,
+                                                                     m_bulkModulus,
+                                                                     m_shearModulus,
+                                                                     m_yieldStress,
+                                                                     dt);
+}
+
+void
+PeridigmNS::ElasticPlasticBondAssociatedCorrespondenceMaterial::computePK2Stress(const double dt,
+                                                                                 const int numOwnedPoints,
+                                                                                 const int* neighborhoodList,
+                                                                                 PeridigmNS::DataManager& dataManager) const
+{
+
+  // Compute the node-level stress values
+  // This is only done for output (visualization) purposes
+  double *PK2StressN;
+  dataManager.getData(m_PK2StressFieldId, PeridigmField::STEP_N)->ExtractView(&PK2StressN);
+
+  double *PK2StressNP1;
+  dataManager.getData(m_PK2StressFieldId, PeridigmField::STEP_NP1)->ExtractView(&PK2StressNP1);
+
+  double *strainRate;
+  dataManager.getData(m_strainRateFieldId, PeridigmField::STEP_NONE)->ExtractView(&strainRate);
+
+  double *vonMisesStress, *equivalentPlasticStrainN, *equivalentPlasticStrainNP1;
+  dataManager.getData(m_vonMisesStressFieldId, PeridigmField::STEP_NONE)->ExtractView(&vonMisesStress);
+  dataManager.getData(m_equivalentPlasticStrainFieldId, PeridigmField::STEP_NP1)->ExtractView(&equivalentPlasticStrainNP1);
+  dataManager.getData(m_equivalentPlasticStrainFieldId, PeridigmField::STEP_N)->ExtractView(&equivalentPlasticStrainN);
+
+  double *stressTriaxiality;
+  dataManager.getData(m_stressTriaxialityFieldId, PeridigmField::STEP_NONE)->ExtractView(&stressTriaxiality);
+
+  CORRESPONDENCE::updateElasticPerfectlyPlasticCauchyStress(strainRate, 
+                                                            PK2StressN, 
+                                                            PK2StressNP1,
+                                                            vonMisesStress,
+                                                            equivalentPlasticStrainN, 
+                                                            equivalentPlasticStrainNP1, 
+                                                            stressTriaxiality,
+                                                            numOwnedPoints,
+                                                            m_bulkModulus,
+                                                            m_shearModulus,
+                                                            m_yieldStress, 
+                                                            dt);
+
+  // Compute the bond-level stress values
+  double *bondLevelPK2StressXXN, *bondLevelPK2StressXYN, *bondLevelPK2StressXZN;
+  double *bondLevelPK2StressYXN, *bondLevelPK2StressYYN, *bondLevelPK2StressYZN;
+  double *bondLevelPK2StressZXN, *bondLevelPK2StressZYN, *bondLevelPK2StressZZN;
+  dataManager.getData(m_bondLevelPK2StressXXFieldId, PeridigmField::STEP_N)->ExtractView(&bondLevelPK2StressXXN);
+  dataManager.getData(m_bondLevelPK2StressXYFieldId, PeridigmField::STEP_N)->ExtractView(&bondLevelPK2StressXYN);
+  dataManager.getData(m_bondLevelPK2StressXZFieldId, PeridigmField::STEP_N)->ExtractView(&bondLevelPK2StressXZN);
+  dataManager.getData(m_bondLevelPK2StressYXFieldId, PeridigmField::STEP_N)->ExtractView(&bondLevelPK2StressYXN);
+  dataManager.getData(m_bondLevelPK2StressYYFieldId, PeridigmField::STEP_N)->ExtractView(&bondLevelPK2StressYYN);
+  dataManager.getData(m_bondLevelPK2StressYZFieldId, PeridigmField::STEP_N)->ExtractView(&bondLevelPK2StressYZN);
+  dataManager.getData(m_bondLevelPK2StressZXFieldId, PeridigmField::STEP_N)->ExtractView(&bondLevelPK2StressZXN);
+  dataManager.getData(m_bondLevelPK2StressZYFieldId, PeridigmField::STEP_N)->ExtractView(&bondLevelPK2StressZYN);
+  dataManager.getData(m_bondLevelPK2StressZZFieldId, PeridigmField::STEP_N)->ExtractView(&bondLevelPK2StressZZN);
+
+  double *bondLevelPK2StressXXNP1, *bondLevelPK2StressXYNP1, *bondLevelPK2StressXZNP1;
+  double *bondLevelPK2StressYXNP1, *bondLevelPK2StressYYNP1, *bondLevelPK2StressYZNP1;
+  double *bondLevelPK2StressZXNP1, *bondLevelPK2StressZYNP1, *bondLevelPK2StressZZNP1;
+  dataManager.getData(m_bondLevelPK2StressXXFieldId, PeridigmField::STEP_NP1)->ExtractView(&bondLevelPK2StressXXNP1);
+  dataManager.getData(m_bondLevelPK2StressXYFieldId, PeridigmField::STEP_NP1)->ExtractView(&bondLevelPK2StressXYNP1);
+  dataManager.getData(m_bondLevelPK2StressXZFieldId, PeridigmField::STEP_NP1)->ExtractView(&bondLevelPK2StressXZNP1);
+  dataManager.getData(m_bondLevelPK2StressYXFieldId, PeridigmField::STEP_NP1)->ExtractView(&bondLevelPK2StressYXNP1);
+  dataManager.getData(m_bondLevelPK2StressYYFieldId, PeridigmField::STEP_NP1)->ExtractView(&bondLevelPK2StressYYNP1);
+  dataManager.getData(m_bondLevelPK2StressYZFieldId, PeridigmField::STEP_NP1)->ExtractView(&bondLevelPK2StressYZNP1);
+  dataManager.getData(m_bondLevelPK2StressZXFieldId, PeridigmField::STEP_NP1)->ExtractView(&bondLevelPK2StressZXNP1);
+  dataManager.getData(m_bondLevelPK2StressZYFieldId, PeridigmField::STEP_NP1)->ExtractView(&bondLevelPK2StressZYNP1);
+  dataManager.getData(m_bondLevelPK2StressZZFieldId, PeridigmField::STEP_NP1)->ExtractView(&bondLevelPK2StressZZNP1);
+
+  double *bondLevelStrainRateXX, *bondLevelStrainRateXY, *bondLevelStrainRateXZ;
+  double *bondLevelStrainRateYX, *bondLevelStrainRateYY, *bondLevelStrainRateYZ;
+  double *bondLevelStrainRateZX, *bondLevelStrainRateZY, *bondLevelStrainRateZZ;
+  dataManager.getData(m_bondLevelStrainRateXXFieldId, PeridigmField::STEP_NONE)->ExtractView(&bondLevelStrainRateXX);
+  dataManager.getData(m_bondLevelStrainRateXYFieldId, PeridigmField::STEP_NONE)->ExtractView(&bondLevelStrainRateXY);
+  dataManager.getData(m_bondLevelStrainRateXZFieldId, PeridigmField::STEP_NONE)->ExtractView(&bondLevelStrainRateXZ);
+  dataManager.getData(m_bondLevelStrainRateYXFieldId, PeridigmField::STEP_NONE)->ExtractView(&bondLevelStrainRateYX);
+  dataManager.getData(m_bondLevelStrainRateYYFieldId, PeridigmField::STEP_NONE)->ExtractView(&bondLevelStrainRateYY);
+  dataManager.getData(m_bondLevelStrainRateYZFieldId, PeridigmField::STEP_NONE)->ExtractView(&bondLevelStrainRateYZ);
+  dataManager.getData(m_bondLevelStrainRateZXFieldId, PeridigmField::STEP_NONE)->ExtractView(&bondLevelStrainRateZX);
+  dataManager.getData(m_bondLevelStrainRateZYFieldId, PeridigmField::STEP_NONE)->ExtractView(&bondLevelStrainRateZY);
+  dataManager.getData(m_bondLevelStrainRateZZFieldId, PeridigmField::STEP_NONE)->ExtractView(&bondLevelStrainRateZZ);
+
+  double *bondLevelVonMisesStress, *bondLevelEquivalentPlasticStrainN, *bondLevelEquivalentPlasticStrainNP1, *bondLevelStressTriaxiality;
+  dataManager.getData(m_bondLevelVonMisesStressFieldId, PeridigmField::STEP_NONE)->ExtractView(&bondLevelVonMisesStress);
+  dataManager.getData(m_bondLevelEquivalentPlasticStrainFieldId, PeridigmField::STEP_NP1)->ExtractView(&bondLevelEquivalentPlasticStrainNP1);
+  dataManager.getData(m_bondLevelEquivalentPlasticStrainFieldId, PeridigmField::STEP_N)->ExtractView(&bondLevelEquivalentPlasticStrainN);
+  dataManager.getData(m_bondLevelStressTriaxialityFieldId, PeridigmField::STEP_NONE)->ExtractView(&bondLevelStressTriaxiality);
+
+  CORRESPONDENCE::updateBondLevelElasticPerfectlyPlasticCauchyStress(bondLevelStrainRateXX,
+                                                                     bondLevelStrainRateXY,
+                                                                     bondLevelStrainRateXZ,
+                                                                     bondLevelStrainRateYX,
+                                                                     bondLevelStrainRateYY,
+                                                                     bondLevelStrainRateYZ,
+                                                                     bondLevelStrainRateZX,
+                                                                     bondLevelStrainRateZY,
+                                                                     bondLevelStrainRateZZ,
+                                                                     bondLevelPK2StressXXN, 
+                                                                     bondLevelPK2StressXYN, 
+                                                                     bondLevelPK2StressXZN, 
+                                                                     bondLevelPK2StressYXN, 
+                                                                     bondLevelPK2StressYYN, 
+                                                                     bondLevelPK2StressYZN, 
+                                                                     bondLevelPK2StressZXN, 
+                                                                     bondLevelPK2StressZYN, 
+                                                                     bondLevelPK2StressZZN, 
+                                                                     bondLevelPK2StressXXNP1, 
+                                                                     bondLevelPK2StressXYNP1, 
+                                                                     bondLevelPK2StressXZNP1, 
+                                                                     bondLevelPK2StressYXNP1, 
+                                                                     bondLevelPK2StressYYNP1, 
+                                                                     bondLevelPK2StressYZNP1, 
+                                                                     bondLevelPK2StressZXNP1, 
+                                                                     bondLevelPK2StressZYNP1, 
+                                                                     bondLevelPK2StressZZNP1, 
                                                                      bondLevelVonMisesStress,
                                                                      bondLevelEquivalentPlasticStrainN,
                                                                      bondLevelEquivalentPlasticStrainNP1,
